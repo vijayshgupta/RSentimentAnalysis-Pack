@@ -1,0 +1,115 @@
+require(plyr)
+require(stringr)
+require(tm)
+require(wordcloud)
+require(RColorBrewer)
+
+#get sentences
+path = paste( "E:/WC/WC-demo.txt", sep = "")
+conn <- file(path,open="r")
+sentences <- readLines(conn)                                             
+close(conn)
+
+#get pos.words
+path = paste( "E:/WC/positive-words.txt", sep = "")
+conn <- file(path,open="r")
+positives <- readLines(conn)                                            
+close(conn)
+pos.words=str_split(positives, '\\s+')
+
+#get neg.words
+path = paste( "E:/WC/negative-words.txt", sep = "")
+conn <- file(path,open="r")
+negatives <- readLines(conn)                                             
+close(conn)
+neg.words=str_split(negatives, '\\s+')
+
+#Calculate Scores
+scores = laply(sentences, function(sentences, pos.words, neg.words) {
+    
+    # clean up sentences with R's regex-driven global substitute, gsub():
+    sentence = gsub('[[:punct:]]', '', sentences)
+    sentence = gsub('[[:cntrl:]]', '', sentence)
+    sentence = gsub('\\d+', '', sentence)
+    # and convert to lower case:
+    sentence = tolower(sentence)
+    
+    # split into words. str_split is in the stringr package
+    word.list = str_split(sentence, '\\s+')
+    # sometimes a list() is one level of hierarchy too much
+    words = unlist(word.list)
+    
+    
+    
+    # compare our words to the dictionaries of positive & negative terms
+    pos.matches = match(words, pos.words)
+    neg.matches = match(words, neg.words)
+    
+    # match() returns the position of the matched term or NA
+    # we just want a TRUE/FALSE:
+    pos.matches = !is.na(pos.matches)
+    neg.matches = !is.na(neg.matches)
+    
+    # and conveniently enough, TRUE/FALSE will be treated as 1/0 by sum():
+    score = sum(pos.matches) - sum(neg.matches)
+    
+    return(score)
+  }, pos.words,neg.words, .progress="text") 
+
+scores.df = data.frame(score=scores, text=sentences) 
+
+
+## [1] "black"   "red"     "green3"  "blue"    "cyan"    "magenta"
+## [7] "yellow"  "gray"
+
+#Creating png of the Scatterplot
+outpath4 = paste(path, "Scatterplot.png", sep = "")
+png(outpath4,600,600)
+plot(scores.df, pch = 19,col=brewer.pal(8, "Set1"))
+dev.off()
+
+
+
+#WordCloud
+
+words <- tm_map(words, stripWhitespace)                              #remove the whitespaces between words
+
+words <- tm_map(words, removePunctuation)                            #remove the punctution makrs
+
+words <- tm_map(words, removeNumbers)                                #remove the numbers from the list
+
+words <- tm_map(words, content_transformer(tolower))                 #lowercase all words
+
+words <- tm_map(words, removeWords, stopwords("english"))            #remove stopwords contained in these stopwords dictionaries
+words <- tm_map(words, removeWords, stopwords("french"))
+words <- tm_map(words, removeWords, stopwords("SMART"))
+words <- tm_map(words, removeWords, stopwords("german"))
+
+for(i in 1:length(names)){                                           #removes names from a given namelist
+  words <- tm_map(words, removeWords, names[i])
+}
+
+words <- tm_map(words, stemDocument)                                 #stems the words to the base word
+
+#Creating png of the wordcloud
+outpath1 = paste(path, "wordcloud.png", sep = "")
+png(outpath1,1080,1080)
+wordcloud(words, scale=c(8,.2),max.words=100, random.order=TRUE,colors=brewer.pal(8, "Set1"))
+dev.off()
+
+
+freq <- DocumentTermMatrix(words)                                    #Make a DTM of the wordlist of the format word:frequency
+freq2 <- as.matrix(freq)                                             #Convert it into a matrix
+sorted = sort(colSums(freq2),decreasing=TRUE)                        #Sort the matrix in decreading order of frequency
+sorted=sorted[1:20]                                                  #Slice the matrix to the first 20 words
+
+#Create png of Histogram of top 20 words
+outpath2 = paste(path, "histogram.png", sep = "")
+png(outpath2,1080,1080) 
+colors = c("red", "yellow", "green", "violet", "orange","blue", "pink", "cyan")
+colors=c(20:50)
+barplot(sorted,las=2,col=brewer.pal(8, "Set2"),legend.text="Histogram of top 20 occuring words")
+dev.off()
+ 
+ 
+  
